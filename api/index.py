@@ -4,7 +4,7 @@ import random
 from http.server import BaseHTTPRequestHandler
 import requests
 
-TELEGRAM_TOKEN = os.environ.get("8909121472:AAE6yF68KY41MIVBhEYPLoMaNKwI7hQQDc4")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
 ROLES = [
     "기도자",
