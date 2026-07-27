@@ -1,48 +1,77 @@
-import json
 import os
+import requests
 import google.generativeai as genai
-from flask import Flask, request
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# Gemini 설정 (Vercel Environment Variables에 GEMINI_API_KEY 등록 필요)
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-1.5-flash')
+# 환경 변수 로드
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
-# 임시/기본 상시 규칙 (코드 내 보관)
+# Gemini API 설정
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+else:
+    model = None
+
 DEFAULT_RULES = [
     "PC 자리는 최대 2명 배치하고, 2번째 PC 담당자는 (이름) 형태 괄호로 표기한다.",
     "일요일 보고일 경우 '※ 예배 후 장비 정리 필수' 문구를 맨 아래에 작성한다."
 ]
 
-@app.route('/api/index', methods=['POST'])
+def send_telegram_message(chat_id, text):
+    if not TELEGRAM_BOT_TOKEN or not chat_id:
+        return
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown"
+    }
+    try:
+        requests.post(url, json=payload, timeout=5)
+    except Exception as e:
+        print(f"Telegram Send Error: {e}")
+
+# Vercel 포워딩 및 루트 접속 모두 지원하도록 멀티 라우트 설정
+@app.route('/', methods=['GET', 'POST'])
+@app.route('/api/index', methods=['GET', 'POST'])
 def webhook():
-    data = request.get_json()
-    
-    # 텔레그램 메시지 텍스트 추출
+    if request.method == 'GET':
+        return "BowPick Bot is running!", 200
+
+    data = request.get_json(silent=True) or {}
     message = data.get('message', {})
     text = message.get('text', '')
     chat_id = message.get('chat', {}).get('id')
-    
-    if "바우픽 규칙 보여줘" in text:
-        # 규칙 목록 출력
-        rules_str = "\n".join([f"- {r}" for r in DEFAULT_RULES])
-        reply = f"🤖 **[현재 적용 중인 바우픽 기본 규칙]**\n{rules_str}"
-        send_telegram_message(chat_id, reply)
-        
-    elif "바우픽" in text:
-        # 참불 보고서 생성 요청 등 처리
-        prompt = f"""
-        너는 참불 관리 AI 조교야. 
-        아래 규칙을 지켜서 메시지를 정리해줘.
-        [규칙]: {DEFAULT_RULES}
-        [입력 데이터]: {text}
-        """
-        response = model.generate_content(prompt)
-        send_telegram_message(chat_id, response.text)
-        
-    return 'OK', 200
 
-def send_telegram_message(chat_id, text):
-    # 텔레그램 sendMessage API 호출 로직
-    pass
+    if not chat_id or not text:
+        return 'OK', 200
+
+    try:
+        if "바우픽 규칙 보여줘" in text:
+            rules_str = "\n".join([f"- {r}" for r in DEFAULT_RULES])
+            reply = f"🤖 **[현재 적용 중인 바우픽 기본 규칙]**\n{rules_str}"
+            send_telegram_message(chat_id, reply)
+
+        elif "바우픽" in text:
+            if not model:
+                send_telegram_message(chat_id, "⚠️ GEMINI_API_KEY가 설정되지 않았습니다.")
+                return 'OK', 200
+
+            prompt = f"""
+너는 참불 관리 AI 조교야. 
+아래 규칙을 지켜서 메시지를 정리해줘.
+[규칙]: {DEFAULT_RULES}
+[입력 데이터]: {text}
+"""
+            response = model.generate_content(prompt)
+            send_telegram_message(chat_id, response.text)
+
+    except Exception as e:
+        print(f"Error processing webhook: {e}")
+        send_telegram_message(chat_id, f"❌ 처리 중 오류 발생: {str(e)}")
+
+    return 'OK', 200
