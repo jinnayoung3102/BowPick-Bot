@@ -9,10 +9,14 @@ app = Flask(__name__)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
-# Gemini API 설정
+# Gemini API 설정 (호환성 높은 모델명으로 지정)
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    # v1beta 호환 에러 방지를 위해 models/ 접두사 명시 또는 gemini-1.5-flash 사용
+    try:
+        model = genai.GenerativeModel('models/gemini-1.5-flash')
+    except Exception:
+        model = genai.GenerativeModel('gemini-pro')
 else:
     model = None
 
@@ -28,7 +32,6 @@ def send_telegram_message(chat_id, text):
     payload = {
         "chat_id": chat_id,
         "text": text
-        # parse_mode를 제거하여 특수문자로 인한 텔레그램 전송 에러(400 Bad Request) 방지
     }
     try:
         res = requests.post(url, json=payload, timeout=10)
