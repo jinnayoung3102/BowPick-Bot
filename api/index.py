@@ -1,4 +1,5 @@
 import os
+import traceback
 import requests
 from openai import OpenAI
 from flask import Flask, request
@@ -117,7 +118,14 @@ def webhook():
             send_telegram_message(chat_id, reply_text)
 
     except Exception as e:
-        print(f"Error processing webhook: {e}")
-        send_telegram_message(chat_id, f"❌ 처리 중 오류 발생: {str(e)}")
+        traceback.print_exc()
+
+        error_name = type(e).__name__
+        error_message = str(e).strip() or "오류 상세 내용이 없습니다."
+
+        send_telegram_message(
+            chat_id,
+            f"❌ {error_name}\n\n{error_message}"
+        )
 
     return 'OK', 200
