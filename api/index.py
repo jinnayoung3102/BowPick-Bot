@@ -2,7 +2,7 @@ import os
 import requests
 from openai import OpenAI
 from flask import Flask, request
-from sheets import test_sheet_connection
+from api.sheets import test_sheet_connection
 
 app = Flask(__name__)
 
