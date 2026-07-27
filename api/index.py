@@ -5,13 +5,19 @@ from openai import OpenAI
 from flask import Flask, request
 
 try:
-    from api.sheets import test_sheet_connection
+    from api.sheets import (
+        test_sheet_connection,
+        save_wednesday_selection,
+    )
     from api.telegram import (
         send_wednesday_recruitment,
         answer_callback_query,
     )
 except ImportError:
-    from sheets import test_sheet_connection
+    from sheets import (
+        test_sheet_connection,
+        save_wednesday_selection,
+    )
     from telegram import (
         send_wednesday_recruitment,
         answer_callback_query,
