@@ -3,6 +3,10 @@ import traceback
 import requests
 from openai import OpenAI
 from flask import Flask, request
+from api.sheets import (
+    test_sheet_connection,
+    save_wednesday_selection,
+)
 
 try:
     from api.sheets import (
@@ -21,6 +25,10 @@ except ImportError:
     from telegram import (
         send_wednesday_recruitment,
         answer_callback_query,
+    )
+    from sheets import (
+    test_sheet_connection,
+    save_wednesday_selection,
     )
 
 app = Flask(__name__)
@@ -109,20 +117,65 @@ def webhook():
                 )
                 return 'OK', 200
 
-            recruitment_id = parts[1]
+                        recruitment_id = parts[1]
             selection = parts[2]
 
+            callback_user = callback_query.get("from", {})
+
+            callback_user_id = str(
+                callback_user.get("id", "")
+            )
+
+            first_name = str(
+                callback_user.get("first_name", "")
+            ).strip()
+
+            last_name = str(
+                callback_user.get("last_name", "")
+            ).strip()
+
+            fallback_name = (
+                f"{last_name}{first_name}".strip()
+                or first_name
+                or f"사용자-{callback_user_id}"
+            )
+
+            save_result = save_wednesday_selection(
+                recruitment_id=recruitment_id,
+                service_date="테스트",
+                telegram_id=callback_user_id,
+                fallback_name=fallback_name,
+                selection=selection,
+            )
+
+            saved_name = save_result.get(
+                "name",
+                fallback_name,
+            )
+
             if selection == "noon":
-                notice_text = "☀️ 정오예배 참석으로 선택되었습니다."
+                notice_text = (
+                    f"☀️ {saved_name}님, "
+                    "정오예배 참석으로 저장되었습니다."
+                )
 
             elif selection == "evening":
-                notice_text = "🌙 저녁예배 참석으로 선택되었습니다."
+                notice_text = (
+                    f"🌙 {saved_name}님, "
+                    "저녁예배 참석으로 저장되었습니다."
+                )
 
             elif selection == "absent":
-                notice_text = "❌ 둘 다 불참으로 선택되었습니다."
+                notice_text = (
+                    f"❌ {saved_name}님, "
+                    "둘 다 불참으로 저장되었습니다."
+                )
 
             elif selection == "attend":
-                notice_text = "⭕ 참석으로 선택되었습니다."
+                notice_text = (
+                    f"⭕ {saved_name}님, "
+                    "참석으로 저장되었습니다."
+                )
 
             else:
                 notice_text = "⚠️ 알 수 없는 선택입니다."
