@@ -15,12 +15,16 @@ app = Flask(__name__)
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
+# ChatGPT 유료 기능을 사용할 수 있는 관리자 텔레그램 ID
+ADMIN_TELEGRAM_ID = "1514822797"
+
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 DEFAULT_RULES = [
     "PC 자리는 최대 2명 배치하고, 2번째 PC 담당자는 (이름) 형태 괄호로 표기한다.",
     "일요일 보고일 경우 '※ 예배 후 장비 정리 필수' 문구를 맨 아래에 작성한다."
 ]
+
 
 def send_telegram_message(chat_id, text):
     if not TELEGRAM_BOT_TOKEN or not chat_id:
@@ -65,14 +69,19 @@ def webhook():
 
     data = request.get_json(silent=True) or {}
     message = data.get('message', {})
+
     text = message.get('text', '')
     chat_id = message.get('chat', {}).get('id')
+
+    # 메시지를 보낸 사람의 고유 텔레그램 ID
+    user_id = str(message.get('from', {}).get('id', ''))
 
     if not chat_id or not text:
         return 'OK', 200
 
     try:
         # 구글 스프레드시트 연결 테스트
+        # OpenAI를 호출하지 않으므로 비용이 발생하지 않음
         if text.strip() == "바우픽 테스트":
             result = test_sheet_connection()
 
@@ -93,14 +102,23 @@ def webhook():
 
             send_telegram_message(chat_id, reply)
 
-        # 정확히 규칙 조회를 원할 경우
+        # 규칙 조회
+        # 현재는 OpenAI를 호출하지 않으므로 비용이 발생하지 않음
         elif "바우픽 규칙 보여줘" in text:
             rules_str = "\n".join([f"- {r}" for r in DEFAULT_RULES])
             reply = f"🤖 [현재 적용 중인 바우픽 기본 규칙]\n{rules_str}"
             send_telegram_message(chat_id, reply)
 
-        # '바우픽'이라는 단어가 포함되어 있으면 ChatGPT가 유연하게 응답
+        # '바우픽'이 포함된 일반 요청은 관리자만 ChatGPT 사용 가능
         elif "바우픽" in text:
+            if user_id != ADMIN_TELEGRAM_ID:
+                send_telegram_message(
+                    chat_id,
+                    "⛔ 관리자 전용 기능입니다.\n"
+                    "OpenAI 기능은 관리자만 사용할 수 있습니다."
+                )
+                return 'OK', 200
+
             prompt = f"""
 너는 참불 관리 및 스태프 안내를 돕는 AI 조교 '바우픽'이야.
 사용자가 한 말에 맞춰 친절하고 센스 있게 대답해줘.
