@@ -410,3 +410,61 @@ def save_wednesday_selection(
         "noon_result": noon_result,
         "evening_result": evening_result,
     }
+
+def get_wednesday_selections(recruitment_id):
+    """
+    특정 수요예배 모집의 최신 선택 결과를 불러온다.
+
+    반환 예시:
+    [
+        {
+            "telegram_id": "1514822797",
+            "name": "진나영",
+            "selection": "저녁"
+        }
+    ]
+    """
+    worksheet = get_worksheet("신청현황")
+    records = worksheet.get_all_records()
+
+    selections = {}
+
+    for record in records:
+        saved_recruitment_id = str(
+            record.get("모집ID", "")
+        ).strip()
+
+        service_type = str(
+            record.get("예배구분", "")
+        ).strip()
+
+        telegram_id = str(
+            record.get("텔레그램ID", "")
+        ).strip()
+
+        name = str(
+            record.get("이름", "")
+        ).strip()
+
+        selection = str(
+            record.get("선택", "")
+        ).strip()
+
+        if saved_recruitment_id != recruitment_id:
+            continue
+
+        if service_type not in {"수요정오", "수요저녁"}:
+            continue
+
+        if not telegram_id and not name:
+            continue
+
+        person_key = telegram_id or name
+
+        selections[person_key] = {
+            "telegram_id": telegram_id,
+            "name": name,
+            "selection": selection,
+        }
+
+    return list(selections.values())
