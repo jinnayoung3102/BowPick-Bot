@@ -6,10 +6,16 @@ from flask import Flask, request
 
 try:
     from api.sheets import test_sheet_connection
-    from api.telegram import send_wednesday_recruitment
+    from api.telegram import (
+        send_wednesday_recruitment,
+        answer_callback_query,
+    )
 except ImportError:
     from sheets import test_sheet_connection
-    from telegram import send_wednesday_recruitment
+    from telegram import (
+        send_wednesday_recruitment,
+        answer_callback_query,
+    )
 
 app = Flask(__name__)
 
@@ -70,18 +76,86 @@ def webhook():
         return "BowPick Bot is running!", 200
 
     data = request.get_json(silent=True) or {}
-    message = data.get('message', {})
-
-    text = message.get('text', '')
-    chat_id = message.get('chat', {}).get('id')
-
-    # 메시지를 보낸 사람의 고유 텔레그램 ID
-    user_id = str(message.get('from', {}).get('id', ''))
-
-    if not chat_id or not text:
-        return 'OK', 200
 
     try:
+        # ==================================================
+        # 인라인 버튼 클릭 처리
+        # 단체방에 새 메시지는 남기지 않고,
+        # 버튼을 누른 사람 화면에만 잠깐 안내를 표시한다.
+        # ==================================================
+        callback_query = data.get("callback_query")
+
+        if callback_query:
+            callback_query_id = callback_query.get("id")
+            callback_data = callback_query.get("data", "")
+
+            # callback_data 형식:
+            # apply|WED-TEST-001|noon
+            # apply|WED-TEST-001|evening
+            # apply|WED-TEST-001|absent
+            parts = callback_data.split("|")
+
+            if len(parts) != 3 or parts[0] != "apply":
+                answer_callback_query(
+                    callback_query_id=callback_query_id,
+                    text="⚠️ 올바르지 않은 버튼입니다.",
+                    show_alert=False,
+                )
+                return 'OK', 200
+
+            recruitment_id = parts[1]
+            selection = parts[2]
+
+            if selection == "noon":
+                notice_text = "☀️ 정오예배 참석으로 선택되었습니다."
+
+            elif selection == "evening":
+                notice_text = "🌙 저녁예배 참석으로 선택되었습니다."
+
+            elif selection == "absent":
+                notice_text = "❌ 둘 다 불참으로 선택되었습니다."
+
+            elif selection == "attend":
+                notice_text = "⭕ 참석으로 선택되었습니다."
+
+            else:
+                notice_text = "⚠️ 알 수 없는 선택입니다."
+
+            print(
+                "Callback received:",
+                {
+                    "recruitment_id": recruitment_id,
+                    "selection": selection,
+                    "user_id": callback_query.get(
+                        "from", {}
+                    ).get("id"),
+                }
+            )
+
+            answer_callback_query(
+                callback_query_id=callback_query_id,
+                text=notice_text,
+                show_alert=False,
+            )
+
+            return 'OK', 200
+
+        # ==================================================
+        # 일반 텔레그램 메시지 처리
+        # ==================================================
+        message = data.get('message', {})
+
+        text = message.get('text', '')
+        chat_id = message.get('chat', {}).get('id')
+
+        # 메시지를 보낸 사람의 고유 텔레그램 ID
+        user_id = str(
+            message.get('from', {}).get('id', '')
+        )
+
+        if not chat_id or not text:
+            return 'OK', 200
+
         # 구글 스프레드시트 연결 테스트
         # OpenAI를 호출하지 않으므로 비용이 발생하지 않음
         if text.strip() == "바우픽 테스트":
@@ -89,7 +163,10 @@ def webhook():
 
             if result.get("success"):
                 sheet_names = "\n".join(
-                    [f"- {name}" for name in result.get("sheets", [])]
+                    [
+                        f"- {name}"
+                        for name in result.get("sheets", [])
+                    ]
                 )
 
                 reply = (
@@ -143,10 +220,17 @@ def webhook():
             )
 
         # 규칙 조회
-        # 현재는 OpenAI를 호출하지 않으므로 비용이 발생하지 않음
+        # OpenAI를 호출하지 않으므로 비용이 발생하지 않음
         elif "바우픽 규칙 보여줘" in text:
-            rules_str = "\n".join([f"- {r}" for r in DEFAULT_RULES])
-            reply = f"🤖 [현재 적용 중인 바우픽 기본 규칙]\n{rules_str}"
+            rules_str = "\n".join(
+                [f"- {rule}" for rule in DEFAULT_RULES]
+            )
+
+            reply = (
+                "🤖 [현재 적용 중인 바우픽 기본 규칙]\n"
+                f"{rules_str}"
+            )
+
             send_telegram_message(chat_id, reply)
 
         # '바우픽'이 포함된 일반 요청은 관리자만 ChatGPT 사용 가능
@@ -179,11 +263,35 @@ def webhook():
         traceback.print_exc()
 
         error_name = type(e).__name__
-        error_message = str(e).strip() or "오류 상세 내용이 없습니다."
-
-        send_telegram_message(
-            chat_id,
-            f"❌ {error_name}\n\n{error_message}"
+        error_message = (
+            str(e).strip()
+            or "오류 상세 내용이 없습니다."
         )
+
+        # callback 처리 중 오류라면 단체방에 오류 메시지를 쌓지 않음
+        callback_query = data.get("callback_query")
+
+        if callback_query:
+            callback_query_id = callback_query.get("id")
+
+            try:
+                answer_callback_query(
+                    callback_query_id=callback_query_id,
+                    text=f"❌ 처리 실패: {error_name}",
+                    show_alert=True,
+                )
+            except Exception:
+                traceback.print_exc()
+
+            return 'OK', 200
+
+        message = data.get("message", {})
+        chat_id = message.get("chat", {}).get("id")
+
+        if chat_id:
+            send_telegram_message(
+                chat_id,
+                f"❌ {error_name}\n\n{error_message}"
+            )
 
     return 'OK', 200
