@@ -2,7 +2,12 @@ import os
 import requests
 from openai import OpenAI
 from flask import Flask, request
-from api.sheets import test_sheet_connection
+
+# Vercel 실행 경로와 로컬 실행 경로를 모두 지원
+try:
+    from api.sheets import test_sheet_connection
+except ImportError:
+    from sheets import test_sheet_connection
 
 app = Flask(__name__)
 
