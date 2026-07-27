@@ -325,13 +325,13 @@ def webhook():
                         )
 
                     except RuntimeError as update_error:
-    error_text = str(update_error).lower()
+                        error_text = str(update_error).lower()
 
-    if (
-        "message is not modified" not in error_text
-        and "message_not_modified" not in error_text
-    ):
-        raise
+                        if (
+                            "message is not modified" not in error_text
+                            and "message_not_modified" not in error_text
+                            ):
+                            raise
 
             elif selection == "attend":
                 notice_text = (
