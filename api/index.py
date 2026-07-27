@@ -325,13 +325,13 @@ def webhook():
                         )
 
                     except RuntimeError as update_error:
-                        # 같은 버튼을 다시 눌러 내용이 완전히 같으면
-                        # Telegram이 message is not modified 오류를 낼 수 있다.
-                        if (
-                            "message is not modified"
-                            not in str(update_error).lower()
-                        ):
-                            raise
+    error_text = str(update_error).lower()
+
+    if (
+        "message is not modified" not in error_text
+        and "message_not_modified" not in error_text
+    ):
+        raise
 
             elif selection == "attend":
                 notice_text = (
