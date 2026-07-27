@@ -324,21 +324,28 @@ def webhook():
                             ),
                         )
 
-                    except RuntimeError as update_error:
-                        error_text = str(update_error).lower()
+                     except RuntimeError as update_error:
+                        error_text = str(update_error).strip()
+                        error_text_lower = error_text.lower()
+
+                        print(
+                            "Telegram message update error:",
+                            error_text
+                        )
 
                         if (
-                            "message is not modified" in error_text
-                            or "message_not_modified" in error_text
-                         ):
+                            "message is not modified" in error_text_lower
+                            or "message_not_modified" in error_text_lower
+                        ):
                             notice_text = (
                                 f"ℹ️ {saved_name}님은 이미 "
-                                f"{'정오예배' if selection=='noon' else '저녁예배' if selection=='evening' else '불참'}"
+                                f"{'정오예배' if selection == 'noon' else '저녁예배' if selection == 'evening' else '불참'}"
                                 "으로 선택되어 있습니다."
                             )
-
-                    else:
-                        raise
+                        else:
+                            notice_text = (
+                                f"❌ 메시지 갱신 오류\n{error_text}"
+                            )
 
             elif selection == "attend":
                 notice_text = (
