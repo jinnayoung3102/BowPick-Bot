@@ -6,7 +6,9 @@ from flask import Flask, request
 app = Flask(__name__)
 
 # 환경 변수 로드
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
 DEFAULT_RULES = [
