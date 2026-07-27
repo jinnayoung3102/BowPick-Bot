@@ -30,9 +30,20 @@ def send_telegram_message(chat_id, text):
     except Exception as e:
         print(f"Telegram Send Error: {e}")
 
-def call_gemini_api(prompt):
-    if not GEMINI_API_KEY:
-        return "⚠️ GEMINI_API_KEY가 설정되지 않았습니다."
+def call_chatgpt(prompt):
+    if not OPENAI_API_KEY:
+        return "⚠️ OPENAI_API_KEY가 설정되지 않았습니다."
+
+    try:
+        response = client.responses.create(
+            model="gpt-5-mini",
+            input=prompt
+        )
+
+        return response.output_text
+
+    except Exception as e:
+        return f"❌ ChatGPT 오류\n{e}"
 
     # 순차적으로 시도할 API 엔드포인트 목록 (2.0-flash 우선 -> 1.5-flash v1 버전)
     urls = [
@@ -99,7 +110,7 @@ def webhook():
 
 사용자 메시지: {text}
 """
-            reply_text = call_gemini_api(prompt)
+            reply_text = call_chatgpt(prompt)
             send_telegram_message(chat_id, reply_text)
 
     except Exception as e:
