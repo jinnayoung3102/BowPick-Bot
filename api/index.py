@@ -27,11 +27,12 @@ def send_telegram_message(chat_id, text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "Markdown"
+        "text": text
+        # parse_mode를 제거하여 특수문자로 인한 텔레그램 전송 에러(400 Bad Request) 방지
     }
     try:
-        requests.post(url, json=payload, timeout=5)
+        res = requests.post(url, json=payload, timeout=10)
+        res.raise_for_status()
     except Exception as e:
         print(f"Telegram Send Error: {e}")
 
@@ -53,7 +54,7 @@ def webhook():
     try:
         if "바우픽 규칙 보여줘" in text:
             rules_str = "\n".join([f"- {r}" for r in DEFAULT_RULES])
-            reply = f"🤖 **[현재 적용 중인 바우픽 기본 규칙]**\n{rules_str}"
+            reply = f"🤖 [현재 적용 중인 바우픽 기본 규칙]\n{rules_str}"
             send_telegram_message(chat_id, reply)
 
         elif "바우픽" in text:
@@ -68,7 +69,10 @@ def webhook():
 [입력 데이터]: {text}
 """
             response = model.generate_content(prompt)
-            send_telegram_message(chat_id, response.text)
+            if response and response.text:
+                send_telegram_message(chat_id, response.text)
+            else:
+                send_telegram_message(chat_id, "⚠️ 응답 생성에 실패했습니다.")
 
     except Exception as e:
         print(f"Error processing webhook: {e}")
