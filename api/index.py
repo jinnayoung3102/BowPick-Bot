@@ -9,26 +9,12 @@ app = Flask(__name__)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
-# Gemini API 설정 및 이용 가능한 모델 자동 탐색
-model = None
+# Gemini API 설정 (현재 가장 안정적인 표준 모델로 명시적 고정)
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    # 지원되는 모델 목록 중 generateContent가 가능한 첫 번째 모델을 자동으로 선점
-    try:
-        available_models = [
-            m.name for m in genai.list_models() 
-            if 'generateContent' in m.supported_generation_methods
-        ]
-        if available_models:
-            # 1.5-flash 계열 우선, 없으면 첫 번째 호환 모델 사용
-            target_model = next((m for m in available_models if '1.5-flash' in m), available_models[0])
-            model = genai.GenerativeModel(target_model)
-            print(f"Loaded Gemini Model: {target_model}")
-        else:
-            model = genai.GenerativeModel('gemini-1.5-flash')
-    except Exception as e:
-        print(f"Model Init Error: {e}")
-        model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-1.5-flash')
+else:
+    model = None
 
 DEFAULT_RULES = [
     "PC 자리는 최대 2명 배치하고, 2번째 PC 담당자는 (이름) 형태 괄호로 표기한다.",
