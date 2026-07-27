@@ -9,12 +9,11 @@ app = Flask(__name__)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
-# Gemini API 설정 (호환성 높은 모델명으로 지정)
+# Gemini API 설정 (호환성 높은 gemini-1.5-flash-latest 사용)
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    # v1beta 호환 에러 방지를 위해 models/ 접두사 명시 또는 gemini-1.5-flash 사용
     try:
-        model = genai.GenerativeModel('models/gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
     except Exception:
         model = genai.GenerativeModel('gemini-pro')
 else:
