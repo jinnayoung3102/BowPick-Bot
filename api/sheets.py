@@ -246,3 +246,167 @@ def test_sheet_connection():
         "message": "구글 스프레드시트 연결에 성공했습니다.",
         "sheets": worksheet_titles,
     }
+
+def get_staff_name_by_telegram_id(telegram_id, fallback_name=""):
+    """
+    텔레그램 ID와 연결된 실제 스탭 이름을 찾는다.
+    아직 ID가 등록되지 않았다면 텔레그램 표시 이름을 사용한다.
+    """
+    telegram_id = str(telegram_id).strip()
+
+    for member in get_active_staff_members():
+        saved_id = str(member.get("텔레그램ID", "")).strip()
+
+        if saved_id and saved_id == telegram_id:
+            return str(member.get("이름", "")).strip()
+
+    return str(fallback_name).strip() or f"사용자-{telegram_id}"
+
+
+def upsert_application(
+    recruitment_id,
+    service_date,
+    service_type,
+    telegram_id,
+    name,
+    selection,
+    final_status,
+):
+    """
+    같은 모집ID + 예배구분 + 텔레그램ID가 있으면 수정하고,
+    없으면 새 행을 추가한다.
+    """
+    worksheet = get_worksheet("신청현황")
+    rows = worksheet.get_all_values()
+
+    telegram_id = str(telegram_id).strip()
+
+    responded_at = datetime.now(
+        ZoneInfo("Asia/Seoul")
+    ).strftime("%Y-%m-%d %H:%M:%S")
+
+    row_values = [
+        recruitment_id,
+        service_date,
+        service_type,
+        telegram_id,
+        name,
+        selection,
+        responded_at,
+        final_status,
+    ]
+
+    # 1행은 제목이므로 2행부터 검색
+    for row_number, row in enumerate(rows[1:], start=2):
+        saved_recruitment_id = (
+            row[0].strip() if len(row) > 0 else ""
+        )
+        saved_service_type = (
+            row[2].strip() if len(row) > 2 else ""
+        )
+        saved_telegram_id = (
+            row[3].strip() if len(row) > 3 else ""
+        )
+
+        if (
+            saved_recruitment_id == recruitment_id
+            and saved_service_type == service_type
+            and saved_telegram_id == telegram_id
+        ):
+            worksheet.update(
+                values=[row_values],
+                range_name=f"A{row_number}:H{row_number}",
+                value_input_option="USER_ENTERED",
+            )
+
+            return {
+                "created": False,
+                "row": row_number,
+            }
+
+    worksheet.append_row(
+        row_values,
+        value_input_option="USER_ENTERED",
+    )
+
+    return {
+        "created": True,
+        "row": None,
+    }
+
+
+def save_wednesday_selection(
+    recruitment_id,
+    service_date,
+    telegram_id,
+    fallback_name,
+    selection,
+):
+    """
+    수요예배 선택을 저장한다.
+
+    noon:
+    수요정오 O / 수요저녁 X
+
+    evening:
+    수요정오 X / 수요저녁 O
+
+    absent:
+    수요정오 X / 수요저녁 X
+    """
+    if selection not in {"noon", "evening", "absent"}:
+        raise ValueError(
+            f"지원하지 않는 수요예배 선택입니다: {selection}"
+        )
+
+    name = get_staff_name_by_telegram_id(
+        telegram_id=telegram_id,
+        fallback_name=fallback_name,
+    )
+
+    if selection == "noon":
+        selection_text = "정오"
+
+        noon_status = "O"
+        evening_status = "X"
+
+    elif selection == "evening":
+        selection_text = "저녁"
+
+        noon_status = "X"
+        evening_status = "O"
+
+    else:
+        selection_text = "불참"
+
+        noon_status = "X"
+        evening_status = "X"
+
+    noon_result = upsert_application(
+        recruitment_id=recruitment_id,
+        service_date=service_date,
+        service_type="수요정오",
+        telegram_id=telegram_id,
+        name=name,
+        selection=selection_text,
+        final_status=noon_status,
+    )
+
+    evening_result = upsert_application(
+        recruitment_id=recruitment_id,
+        service_date=service_date,
+        service_type="수요저녁",
+        telegram_id=telegram_id,
+        name=name,
+        selection=selection_text,
+        final_status=evening_status,
+    )
+
+    return {
+        "name": name,
+        "selection": selection,
+        "noon_status": noon_status,
+        "evening_status": evening_status,
+        "noon_result": noon_result,
+        "evening_result": evening_result,
+    }
