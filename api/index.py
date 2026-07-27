@@ -328,10 +328,17 @@ def webhook():
                         error_text = str(update_error).lower()
 
                         if (
-                            "message is not modified" not in error_text
-                            and "message_not_modified" not in error_text
-                            ):
-                            raise
+                            "message is not modified" in error_text
+                            or "message_not_modified" in error_text
+                         ):
+                            notice_text = (
+                                f"ℹ️ {saved_name}님은 이미 "
+                                f"{'정오예배' if selection=='noon' else '저녁예배' if selection=='evening' else '불참'}"
+                                "으로 선택되어 있습니다."
+                            )
+
+                    else:
+                        raise
 
             elif selection == "attend":
                 notice_text = (
