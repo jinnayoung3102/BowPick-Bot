@@ -2,7 +2,7 @@ import os
 import requests
 from openai import OpenAI
 from flask import Flask, request
-from sheets import get_sheet_names
+from sheets import test_sheet_connection
 
 app = Flask(__name__)
 
@@ -67,8 +67,29 @@ def webhook():
         return 'OK', 200
 
     try:
+        # 구글 스프레드시트 연결 테스트
+        if text.strip() == "바우픽 테스트":
+            result = test_sheet_connection()
+
+            if result.get("success"):
+                sheet_names = "\n".join(
+                    [f"- {name}" for name in result.get("sheets", [])]
+                )
+
+                reply = (
+                    "✅ 구글 시트 연결 성공!\n\n"
+                    f"{sheet_names}"
+                )
+            else:
+                reply = (
+                    "❌ 구글 시트 연결 실패\n\n"
+                    f"{result.get('message', '알 수 없는 오류')}"
+                )
+
+            send_telegram_message(chat_id, reply)
+
         # 정확히 규칙 조회를 원할 경우
-        if "바우픽 규칙 보여줘" in text:
+        elif "바우픽 규칙 보여줘" in text:
             rules_str = "\n".join([f"- {r}" for r in DEFAULT_RULES])
             reply = f"🤖 [현재 적용 중인 바우픽 기본 규칙]\n{rules_str}"
             send_telegram_message(chat_id, reply)
