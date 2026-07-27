@@ -6,8 +6,10 @@ from flask import Flask, request
 
 try:
     from api.sheets import test_sheet_connection
+    from api.telegram import send_wednesday_recruitment
 except ImportError:
     from sheets import test_sheet_connection
+    from telegram import send_wednesday_recruitment
 
 app = Flask(__name__)
 
@@ -101,6 +103,44 @@ def webhook():
                 )
 
             send_telegram_message(chat_id, reply)
+
+        # 수요예배 모집글 및 인라인 버튼 출력 테스트
+        # OpenAI를 호출하지 않으므로 비용이 발생하지 않음
+        elif text.strip() == "바우픽 수요 모집 테스트":
+            if user_id != ADMIN_TELEGRAM_ID:
+                send_telegram_message(
+                    chat_id,
+                    "⛔ 관리자 전용 테스트입니다."
+                )
+                return 'OK', 200
+
+            noon_names = [
+                "김지은",
+                "김민창",
+                "김영식",
+                "정은혜",
+                "박주영",
+                "진나영"
+            ]
+
+            evening_names = [
+                "강예린",
+                "김소연",
+                "한예준",
+                "서태희",
+                "김유진",
+                "노유림",
+                "이경환"
+            ]
+
+            send_wednesday_recruitment(
+                chat_id=chat_id,
+                recruitment_id="WED-TEST-001",
+                service_date="수요예배 테스트",
+                noon_names=noon_names,
+                evening_names=evening_names,
+                deadline_text="테스트 종료 전까지"
+            )
 
         # 규칙 조회
         # 현재는 OpenAI를 호출하지 않으므로 비용이 발생하지 않음
