@@ -2,6 +2,7 @@ import os
 import requests
 from openai import OpenAI
 from flask import Flask, request
+from sheets import get_sheet_names
 
 app = Flask(__name__)
 
