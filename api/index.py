@@ -1,9 +1,10 @@
 import os
 import time
 import traceback
+
 import requests
-from openai import OpenAI
 from flask import Flask, request
+from openai import OpenAI
 
 try:
     from api.sheets import (
@@ -14,6 +15,7 @@ try:
         get_enabled_rules,
         get_assignment_history,
         get_applications,
+        save_assignment_draft,
     )
 
     from api.ai import (
@@ -36,6 +38,7 @@ except ImportError:
         get_enabled_rules,
         get_assignment_history,
         get_applications,
+        save_assignment_draft,
     )
 
     from ai import (
@@ -49,21 +52,29 @@ except ImportError:
         answer_callback_query,
     )
 
+
 app = Flask(__name__)
 
-# 환경 변수 로드
+
+# 환경 변수
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
-# ChatGPT 유료 기능을 사용할 수 있는 관리자 텔레그램 ID
+# 관리자 텔레그램 ID
 ADMIN_TELEGRAM_ID = "1514822797"
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 
 DEFAULT_RULES = [
-    "PC 자리는 최대 2명 배치하고, 2번째 PC 담당자는 (이름) 형태 괄호로 표기한다.",
-    "일요일 보고일 경우 '※ 예배 후 장비 정리 필수' 문구를 맨 아래에 작성한다."
+    (
+        "PC 자리는 최대 2명 배치하고, "
+        "2번째 PC 담당자는 (이름) 형태 괄호로 표기한다."
+    ),
+    (
+        "일요일 보고일 경우 "
+        "'※ 예배 후 장비 정리 필수' 문구를 맨 아래에 작성한다."
+    ),
 ]
 
 
@@ -89,6 +100,9 @@ DEFAULT_WEDNESDAY_EVENING_NAMES = [
 
 
 def send_telegram_message(chat_id, text):
+    """
+    텔레그램 일반 메시지를 전송한다.
+    """
     if not TELEGRAM_BOT_TOKEN or not chat_id:
         return
 
@@ -106,15 +120,22 @@ def send_telegram_message(chat_id, text):
         response = requests.post(
             url,
             json=payload,
-            timeout=10,
+            timeout=15,
         )
         response.raise_for_status()
 
     except Exception as error:
-        print(f"Telegram Send Error: {error}")
+        print(
+            "Telegram Send Error:",
+            type(error).__name__,
+            str(error),
+        )
 
 
 def call_chatgpt(prompt):
+    """
+    일반 바우픽 대화를 위한 OpenAI 호출 함수.
+    """
     if not OPENAI_API_KEY:
         return "⚠️ OPENAI_API_KEY가 설정되지 않았습니다."
 
@@ -127,7 +148,10 @@ def call_chatgpt(prompt):
         return response.output_text.strip()
 
     except Exception as error:
-        return f"❌ ChatGPT API 오류: {str(error)}"
+        return (
+            "❌ ChatGPT API 오류: "
+            f"{type(error).__name__}: {str(error)}"
+        )
 
 
 def unique_names(names):
@@ -154,19 +178,15 @@ def unique_names(names):
 
 def build_wednesday_live_names(recruitment_id):
     """
-    기본 명단에 신청현황의 최신 선택을 반영한다.
-
-    정오 선택:
-    정오 명단에만 포함
-
-    저녁 선택:
-    저녁 명단에만 포함
-
-    불참 선택:
-    두 명단에서 모두 제외
+    기본 수요예배 명단에 신청현황의 최신 선택을 반영한다.
     """
-    noon_names = list(DEFAULT_WEDNESDAY_NOON_NAMES)
-    evening_names = list(DEFAULT_WEDNESDAY_EVENING_NAMES)
+    noon_names = list(
+        DEFAULT_WEDNESDAY_NOON_NAMES
+    )
+
+    evening_names = list(
+        DEFAULT_WEDNESDAY_EVENING_NAMES
+    )
 
     selections = get_wednesday_selections(
         recruitment_id
@@ -184,7 +204,7 @@ def build_wednesday_live_names(recruitment_id):
         if not name:
             continue
 
-        # 기존 위치에서 먼저 제거
+        # 기존 명단에서 먼저 제거
         noon_names = [
             saved_name
             for saved_name in noon_names
@@ -197,7 +217,7 @@ def build_wednesday_live_names(recruitment_id):
             if saved_name != name
         ]
 
-        # 마지막 선택 상태에 따라 다시 추가
+        # 최신 선택 상태 반영
         if selection == "정오":
             noon_names.append(name)
 
@@ -219,26 +239,42 @@ def webhook():
     if request.method == "GET":
         return "BowPick Bot is running!", 200
 
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(
+        silent=True
+    ) or {}
 
     try:
         # ==================================================
         # 인라인 버튼 클릭 처리
         # ==================================================
-        callback_query = data.get("callback_query")
+        callback_query = data.get(
+            "callback_query"
+        )
 
         if callback_query:
-            callback_query_id = callback_query.get("id")
-            callback_data = callback_query.get("data", "")
+            callback_query_id = (
+                callback_query.get("id")
+            )
+
+            callback_data = (
+                callback_query.get(
+                    "data",
+                    "",
+                )
+            )
 
             parts = callback_data.split("|")
 
-            if len(parts) != 3 or parts[0] != "apply":
+            if (
+                len(parts) != 3
+                or parts[0] != "apply"
+            ):
                 answer_callback_query(
                     callback_query_id=callback_query_id,
                     text="⚠️ 올바르지 않은 버튼입니다.",
                     show_alert=False,
                 )
+
                 return "OK", 200
 
             recruitment_id = parts[1]
@@ -276,22 +312,33 @@ def webhook():
                 show_alert=False,
             )
 
-            # 버튼을 누른 사용자 정보
-            callback_user = callback_query.get(
-                "from",
-                {},
+            # 버튼을 누른 사람 정보
+            callback_user = (
+                callback_query.get(
+                    "from",
+                    {},
+                )
             )
 
             callback_user_id = str(
-                callback_user.get("id", "")
+                callback_user.get(
+                    "id",
+                    "",
+                )
             )
 
             first_name = str(
-                callback_user.get("first_name", "")
+                callback_user.get(
+                    "first_name",
+                    "",
+                )
             ).strip()
 
             last_name = str(
-                callback_user.get("last_name", "")
+                callback_user.get(
+                    "last_name",
+                    "",
+                )
             ).strip()
 
             fallback_name = (
@@ -306,12 +353,14 @@ def webhook():
                 "evening",
                 "absent",
             }:
-                save_result = save_wednesday_selection(
-                    recruitment_id=recruitment_id,
-                    service_date="테스트",
-                    telegram_id=callback_user_id,
-                    fallback_name=fallback_name,
-                    selection=selection,
+                save_result = (
+                    save_wednesday_selection(
+                        recruitment_id=recruitment_id,
+                        service_date="테스트",
+                        telegram_id=callback_user_id,
+                        fallback_name=fallback_name,
+                        selection=selection,
+                    )
                 )
 
                 saved_name = save_result.get(
@@ -326,11 +375,10 @@ def webhook():
                         "selection": selection,
                         "user_id": callback_user_id,
                         "name": saved_name,
-                    }
+                    },
                 )
 
-                # 여러 사람이 거의 동시에 누를 경우를 고려해
-                # 잠시 기다린 뒤 최신 시트 내용을 다시 읽는다.
+                # 동시에 여러 명이 누르는 상황을 고려
                 time.sleep(0.2)
 
                 noon_names, evening_names = (
@@ -339,18 +387,24 @@ def webhook():
                     )
                 )
 
-                callback_message = callback_query.get(
-                    "message",
-                    {},
+                callback_message = (
+                    callback_query.get(
+                        "message",
+                        {},
+                    )
                 )
 
-                callback_chat_id = callback_message.get(
-                    "chat",
-                    {},
-                ).get("id")
+                callback_chat_id = (
+                    callback_message.get(
+                        "chat",
+                        {},
+                    ).get("id")
+                )
 
                 callback_message_id = (
-                    callback_message.get("message_id")
+                    callback_message.get(
+                        "message_id"
+                    )
                 )
 
                 if (
@@ -362,7 +416,9 @@ def webhook():
                             chat_id=callback_chat_id,
                             message_id=callback_message_id,
                             recruitment_id=recruitment_id,
-                            service_date="수요예배 테스트",
+                            service_date=(
+                                "수요예배 테스트"
+                            ),
                             noon_names=noon_names,
                             evening_names=evening_names,
                             deadline_text=(
@@ -384,8 +440,7 @@ def webhook():
                             error_text,
                         )
 
-                        # 같은 선택을 다시 눌러서
-                        # 모집글 내용이 변하지 않은 경우는 정상 처리
+                        # 같은 상태를 다시 선택한 경우
                         if (
                             "message is not modified"
                             in error_text_lower
@@ -403,7 +458,7 @@ def webhook():
                     {
                         "recruitment_id": recruitment_id,
                         "user_id": callback_user_id,
-                    }
+                    },
                 )
 
             else:
@@ -417,9 +472,16 @@ def webhook():
         # ==================================================
         # 일반 텔레그램 메시지 처리
         # ==================================================
-        message = data.get("message", {})
+        message = data.get(
+            "message",
+            {},
+        )
 
-        text = message.get("text", "")
+        text = message.get(
+            "text",
+            "",
+        )
+
         chat_id = message.get(
             "chat",
             {},
@@ -429,14 +491,21 @@ def webhook():
             message.get(
                 "from",
                 {},
-            ).get("id", "")
+            ).get(
+                "id",
+                "",
+            )
         )
 
         if not chat_id or not text:
             return "OK", 200
 
-        # 구글 스프레드시트 연결 테스트
-        if text.strip() == "바우픽 테스트":
+        clean_text = text.strip()
+
+        # ----------------------------------------------
+        # 구글시트 연결 테스트
+        # ----------------------------------------------
+        if clean_text == "바우픽 테스트":
             result = test_sheet_connection()
 
             if result.get("success"):
@@ -466,15 +535,19 @@ def webhook():
                 reply,
             )
 
-        # 수요예배 모집글 및 버튼 출력 테스트
-                # 자동배치 테스트
-                # 수요예배 모집글 및 버튼 출력 테스트
-        elif text.strip() == "바우픽 수요 모집 테스트":
+        # ----------------------------------------------
+        # 수요예배 모집 테스트
+        # ----------------------------------------------
+        elif (
+            clean_text
+            == "바우픽 수요 모집 테스트"
+        ):
             if user_id != ADMIN_TELEGRAM_ID:
                 send_telegram_message(
                     chat_id,
                     "⛔ 관리자 전용 테스트입니다.",
                 )
+
                 return "OK", 200
 
             recruitment_id = "WED-TEST-001"
@@ -494,38 +567,81 @@ def webhook():
                 deadline_text="테스트 종료 전까지",
             )
 
-        # 자동배치 테스트
-        elif text.strip() == "바우픽 수요 배치 테스트":
+        # ----------------------------------------------
+        # 수요예배 자동배치 테스트
+        # ----------------------------------------------
+        elif (
+            clean_text
+            == "바우픽 수요 배치 테스트"
+        ):
             if user_id != ADMIN_TELEGRAM_ID:
                 send_telegram_message(
                     chat_id,
                     "⛔ 관리자 전용 기능입니다.",
                 )
+
                 return "OK", 200
 
+            # 신청현황 읽기
             applications = get_applications()
+
             attendees = []
 
             for row in applications:
+                saved_recruitment_id = str(
+                    row.get(
+                        "모집ID",
+                        "",
+                    )
+                ).strip()
+
+                saved_service_type = str(
+                    row.get(
+                        "예배구분",
+                        "",
+                    )
+                ).strip()
+
+                final_status = str(
+                    row.get(
+                        "최종상태",
+                        "",
+                    )
+                ).strip().upper()
+
                 if (
-                    str(row.get("모집ID", "")).strip()
+                    saved_recruitment_id
                     == "WED-TEST-001"
-                    and str(row.get("예배구분", "")).strip()
+                    and saved_service_type
                     == "수요정오"
-                    and str(row.get("최종상태", "")).strip().upper()
-                    == "O"
+                    and final_status == "O"
                 ):
                     name = str(
-                        row.get("이름", "")
+                        row.get(
+                            "이름",
+                            "",
+                        )
                     ).strip()
 
                     if name:
                         attendees.append(name)
 
-            staff_members = get_active_staff_members()
-            rules = get_enabled_rules()
-            history = get_assignment_history()
+            attendees = unique_names(
+                attendees
+            )
 
+            # 자동배치 입력 데이터
+            staff_members = (
+                get_active_staff_members()
+            )
+
+            rules = get_enabled_rules()
+
+            history = (
+                get_assignment_history()
+            )
+
+            # OpenAI 자동배치
             result = generate_staff_assignment(
                 service_date="수요예배 테스트",
                 service_type="수요정오",
@@ -535,17 +651,63 @@ def webhook():
                 history=history,
             )
 
-            assignment_message = format_assignment_message(
-                result
+            draft_result = None
+
+            # 성공한 배치만 배치초안에 저장
+            if result.get("success"):
+                draft_result = (
+                    save_assignment_draft(
+                        service_date=(
+                            "수요예배 테스트"
+                        ),
+                        service_type="수요정오",
+                        assignment_result=result,
+                    )
+                )
+
+            assignment_message = (
+                format_assignment_message(
+                    result
+                )
             )
+
+            # 초안 저장 결과를 텔레그램 메시지에 추가
+            if (
+                draft_result
+                and draft_result.get("success")
+            ):
+                assignment_message += (
+                    "\n\n"
+                    f"📝 초안ID: "
+                    f"{draft_result.get('draft_id')}\n"
+                    f"저장된 배치: "
+                    f"{draft_result.get('saved_count')}건\n"
+                    "상태: 대기"
+                )
+
+            elif (
+                result.get("success")
+                and draft_result
+            ):
+                assignment_message += (
+                    "\n\n"
+                    "⚠️ 자동배치는 완료됐지만 "
+                    "배치초안 저장에 실패했습니다.\n"
+                    f"{draft_result.get('message', '')}"
+                )
 
             send_telegram_message(
                 chat_id,
                 assignment_message,
             )
 
+        # ----------------------------------------------
         # 규칙 조회
-        elif "바우픽 규칙 보여줘" in text:
+        # ----------------------------------------------
+        elif (
+            "바우픽 규칙 보여줘"
+            in text
+        ):
             rules_str = "\n".join(
                 [
                     f"- {rule}"
@@ -563,19 +725,28 @@ def webhook():
                 reply,
             )
 
-        # 일반 바우픽 호출은 관리자만 ChatGPT 사용 가능
+        # ----------------------------------------------
+        # 일반 바우픽 AI 대화
+        # ----------------------------------------------
         elif "바우픽" in text:
             if user_id != ADMIN_TELEGRAM_ID:
                 send_telegram_message(
                     chat_id,
-                    "⛔ 관리자 전용 기능입니다.\n"
-                    "OpenAI 기능은 관리자만 사용할 수 있습니다.",
+                    (
+                        "⛔ 관리자 전용 기능입니다.\n"
+                        "OpenAI 기능은 관리자만 "
+                        "사용할 수 있습니다."
+                    ),
                 )
+
                 return "OK", 200
 
             prompt = f"""
-너는 참불 관리 및 스태프 안내를 돕는 AI 조교 '바우픽'이야.
-사용자가 한 말에 맞춰 친절하고 센스 있게 대답해줘.
+너는 참불 관리 및 스태프 안내를 돕는
+AI 조교 '바우픽'이야.
+
+사용자가 한 말에 맞춰 친절하고
+센스 있게 대답해줘.
 
 업무, 스태프, 명단 정리, 보고,
 규칙 수정 등에 대한 요청에는
@@ -588,7 +759,9 @@ def webhook():
 {text}
 """
 
-            reply_text = call_chatgpt(prompt)
+            reply_text = call_chatgpt(
+                prompt
+            )
 
             send_telegram_message(
                 chat_id,
@@ -598,7 +771,10 @@ def webhook():
     except Exception as error:
         traceback.print_exc()
 
-        error_name = type(error).__name__
+        error_name = type(
+            error
+        ).__name__
+
         error_message = (
             str(error).strip()
             or "오류 상세 내용이 없습니다."
@@ -609,8 +785,8 @@ def webhook():
         )
 
         if callback_query:
-            # 콜백은 이미 즉시 응답했으므로
-            # 다시 팝업을 전송하지 않고 로그만 남긴다.
+            # 콜백은 이미 즉시 응답했기 때문에
+            # 단체방에 오류 메시지를 남기지 않는다.
             print(
                 "Callback processing error:",
                 error_name,
@@ -619,7 +795,10 @@ def webhook():
 
             return "OK", 200
 
-        message = data.get("message", {})
+        message = data.get(
+            "message",
+            {},
+        )
 
         chat_id = message.get(
             "chat",
@@ -629,7 +808,10 @@ def webhook():
         if chat_id:
             send_telegram_message(
                 chat_id,
-                f"❌ {error_name}\n\n{error_message}",
+                (
+                    f"❌ {error_name}\n\n"
+                    f"{error_message}"
+                ),
             )
 
     return "OK", 200
