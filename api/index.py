@@ -319,18 +319,16 @@ def webhook():
                             service_date="수요예배 테스트",
                             noon_names=noon_names,
                             evening_names=evening_names,
-                            deadline_text=(
-                                "테스트 종료 전까지"
-                            ),
+                            deadline_text="테스트 종료 전까지",
                         )
 
-                     except RuntimeError as update_error:
+                    except RuntimeError as update_error:
                         error_text = str(update_error).strip()
                         error_text_lower = error_text.lower()
 
                         print(
                             "Telegram message update error:",
-                            error_text
+                            error_text,
                         )
 
                         if (
@@ -343,9 +341,7 @@ def webhook():
                                 "으로 선택되어 있습니다."
                             )
                         else:
-                            notice_text = (
-                                f"❌ 메시지 갱신 오류\n{error_text}"
-                            )
+                            raise
 
             elif selection == "attend":
                 notice_text = (
