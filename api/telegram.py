@@ -455,3 +455,36 @@ def close_sunday_recruitment(
             "inline_keyboard": []
         },
     )
+
+def make_assignment_keyboard(draft_id):
+    """
+    자동배치 결과용 버튼
+    """
+    return {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "✅ 확정",
+                    "callback_data": f"draft_confirm|{draft_id}",
+                },
+                {
+                    "text": "🔄 다시배치",
+                    "callback_data": f"draft_retry|{draft_id}",
+                },
+            ]
+        ]
+    }
+
+def send_assignment_result(
+    chat_id,
+    text,
+    draft_id,
+):
+    """
+    자동배치 결과를 버튼과 함께 전송한다.
+    """
+    return send_telegram_message(
+        chat_id=chat_id,
+        text=text,
+        reply_markup=make_assignment_keyboard(draft_id),
+    )
