@@ -23,10 +23,11 @@ try:
         format_assignment_message,
     )
 
-    from api.telegram import (
+    from telegram import (
         send_wednesday_recruitment,
         update_wednesday_recruitment,
         answer_callback_query,
+        send_assignment_result,      # 추가
     )
 
 except ImportError:
