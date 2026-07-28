@@ -7,36 +7,47 @@ from flask import Flask, request
 
 try:
     from api.sheets import (
-    test_sheet_connection,
-    save_wednesday_selection,
-    get_active_staff_members,
-    get_enabled_rules,
-    get_assignment_history,
-    get_applications,
-)
+        test_sheet_connection,
+        save_wednesday_selection,
+        get_wednesday_selections,
+        get_active_staff_members,
+        get_enabled_rules,
+        get_assignment_history,
+        get_applications,
+    )
 
-from api.ai import (
-    generate_staff_assignment,
-    format_assignment_message,
-)
+    from api.ai import (
+        generate_staff_assignment,
+        format_assignment_message,
+    )
 
-from api.telegram import (
+    from api.telegram import (
         send_wednesday_recruitment,
         update_wednesday_recruitment,
         answer_callback_query,
     )
+
 except ImportError:
     from sheets import (
         test_sheet_connection,
         save_wednesday_selection,
         get_wednesday_selections,
+        get_active_staff_members,
+        get_enabled_rules,
+        get_assignment_history,
+        get_applications,
     )
+
+    from ai import (
+        generate_staff_assignment,
+        format_assignment_message,
+    )
+
     from telegram import (
         send_wednesday_recruitment,
         update_wednesday_recruitment,
         answer_callback_query,
     )
-
 
 app = Flask(__name__)
 
