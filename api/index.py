@@ -19,7 +19,8 @@ from api.ai import (
     generate_staff_assignment,
     format_assignment_message,
 )
-    from api.telegram import (
+
+from api.telegram import (
         send_wednesday_recruitment,
         update_wednesday_recruitment,
         answer_callback_query,
