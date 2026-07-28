@@ -468,51 +468,8 @@ def webhook():
 
         # 수요예배 모집글 및 버튼 출력 테스트
                 # 자동배치 테스트
-        elif text.strip() == "바우픽 수요 배치 테스트":
-
-            if user_id != ADMIN_TELEGRAM_ID:
-                send_telegram_message(
-                    chat_id,
-                    "⛔ 관리자 전용 기능입니다.",
-                )
-                return "OK", 200
-
-            applications = get_applications()
-
-            attendees = []
-
-            for row in applications:
-
-                if (
-                    str(row.get("모집ID", "")).strip() == "WED-TEST-001"
-                    and str(row.get("예배구분", "")).strip() == "수요정오"
-                    and str(row.get("최종상태", "")).strip().upper() == "O"
-                ):
-                    attendees.append(
-                        row.get("이름")
-                    )
-
-            staff_members = get_active_staff_members()
-
-            rules = get_enabled_rules()
-
-            history = get_assignment_history()
-
-            result = generate_staff_assignment(
-                service_date="수요예배 테스트",
-                service_type="수요정오",
-                attendees=attendees,
-                staff_members=staff_members,
-                rules=rules,
-                history=history,
-            )
-
-            message = format_assignment_message(result)
-
-            send_telegram_message(
-                chat_id,
-                message,
-            ):
+                # 수요예배 모집글 및 버튼 출력 테스트
+        elif text.strip() == "바우픽 수요 모집 테스트":
             if user_id != ADMIN_TELEGRAM_ID:
                 send_telegram_message(
                     chat_id,
@@ -534,29 +491,60 @@ def webhook():
                 service_date="수요예배 테스트",
                 noon_names=noon_names,
                 evening_names=evening_names,
-                deadline_text=(
-                    "테스트 종료 전까지"
-                ),
+                deadline_text="테스트 종료 전까지",
             )
 
-        # 규칙 조회
-        elif "바우픽 규칙 보여줘" in text:
-            rules_str = "\n".join(
-                [
-                    f"- {rule}"
-                    for rule in DEFAULT_RULES
-                ]
+        # 자동배치 테스트
+        elif text.strip() == "바우픽 수요 배치 테스트":
+            if user_id != ADMIN_TELEGRAM_ID:
+                send_telegram_message(
+                    chat_id,
+                    "⛔ 관리자 전용 기능입니다.",
+                )
+                return "OK", 200
+
+            applications = get_applications()
+            attendees = []
+
+            for row in applications:
+                if (
+                    str(row.get("모집ID", "")).strip()
+                    == "WED-TEST-001"
+                    and str(row.get("예배구분", "")).strip()
+                    == "수요정오"
+                    and str(row.get("최종상태", "")).strip().upper()
+                    == "O"
+                ):
+                    name = str(
+                        row.get("이름", "")
+                    ).strip()
+
+                    if name:
+                        attendees.append(name)
+
+            staff_members = get_active_staff_members()
+            rules = get_enabled_rules()
+            history = get_assignment_history()
+
+            result = generate_staff_assignment(
+                service_date="수요예배 테스트",
+                service_type="수요정오",
+                attendees=attendees,
+                staff_members=staff_members,
+                rules=rules,
+                history=history,
             )
 
-            reply = (
-                "🤖 [현재 적용 중인 바우픽 기본 규칙]\n"
-                f"{rules_str}"
+            assignment_message = format_assignment_message(
+                result
             )
 
             send_telegram_message(
                 chat_id,
-                reply,
+                assignment_message,
             )
+
+        # 규칙 조회
 
         # 일반 바우픽 호출은 관리자만 ChatGPT 사용 가능
         elif "바우픽" in text:
