@@ -6,6 +6,7 @@ import requests
 from flask import Flask, request
 from openai import OpenAI
 
+
 try:
     from api.sheets import (
         test_sheet_connection,
@@ -23,11 +24,11 @@ try:
         format_assignment_message,
     )
 
-    from telegram import (
+    from api.telegram import (
         send_wednesday_recruitment,
         update_wednesday_recruitment,
         answer_callback_query,
-        send_assignment_result,      # 추가
+        send_assignment_result,
     )
 
 except ImportError:
@@ -51,6 +52,7 @@ except ImportError:
         send_wednesday_recruitment,
         update_wednesday_recruitment,
         answer_callback_query,
+        send_assignment_result,
     )
 
 
@@ -123,6 +125,7 @@ def send_telegram_message(chat_id, text):
             json=payload,
             timeout=15,
         )
+
         response.raise_for_status()
 
     except Exception as error:
@@ -264,6 +267,8 @@ def webhook():
                 )
             )
 
+            # 현재 단계에서는 모집 신청 버튼만 처리한다.
+            # 확정/다시배치 버튼 처리는 다음 단계에서 추가한다.
             parts = callback_data.split("|")
 
             if (
@@ -272,7 +277,9 @@ def webhook():
             ):
                 answer_callback_query(
                     callback_query_id=callback_query_id,
-                    text="⚠️ 올바르지 않은 버튼입니다.",
+                    text=(
+                        "⚠️ 아직 연결되지 않은 버튼입니다."
+                    ),
                     show_alert=False,
                 )
 
@@ -672,7 +679,7 @@ def webhook():
                 )
             )
 
-            # 초안 저장 결과를 텔레그램 메시지에 추가
+            # 초안 저장 결과를 메시지에 추가
             if (
                 draft_result
                 and draft_result.get("success")
@@ -697,10 +704,25 @@ def webhook():
                     f"{draft_result.get('message', '')}"
                 )
 
-            send_telegram_message(
-                chat_id,
-                assignment_message,
-            )
+            # 초안 저장 성공 시 확정/다시배치 버튼 표시
+            if (
+                draft_result
+                and draft_result.get("success")
+            ):
+                send_assignment_result(
+                    chat_id=chat_id,
+                    text=assignment_message,
+                    draft_id=draft_result.get(
+                        "draft_id"
+                    ),
+                )
+
+            # 자동배치 실패 또는 초안 저장 실패 시 일반 메시지
+            else:
+                send_telegram_message(
+                    chat_id,
+                    assignment_message,
+                )
 
         # ----------------------------------------------
         # 규칙 조회
@@ -786,8 +808,8 @@ AI 조교 '바우픽'이야.
         )
 
         if callback_query:
-            # 콜백은 이미 즉시 응답했기 때문에
-            # 단체방에 오류 메시지를 남기지 않는다.
+            # 버튼 클릭 오류는 단체방에 남기지 않고
+            # Vercel 로그에만 기록한다.
             print(
                 "Callback processing error:",
                 error_name,
