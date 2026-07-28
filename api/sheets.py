@@ -415,19 +415,13 @@ def get_wednesday_selections(recruitment_id):
     """
     특정 수요예배 모집의 최신 선택 결과를 불러온다.
 
-    반환 예시:
-    [
-        {
-            "telegram_id": "1514822797",
-            "name": "진나영",
-            "selection": "저녁"
-        }
-    ]
+    같은 사람의 기록이 여러 개 있어도
+    응답시간이 가장 최근인 선택만 사용한다.
     """
     worksheet = get_worksheet("신청현황")
     records = worksheet.get_all_records()
 
-    selections = {}
+    latest_selections = {}
 
     for record in records:
         saved_recruitment_id = str(
@@ -450,10 +444,17 @@ def get_wednesday_selections(recruitment_id):
             record.get("선택", "")
         ).strip()
 
+        responded_at = str(
+            record.get("응답시간", "")
+        ).strip()
+
         if saved_recruitment_id != recruitment_id:
             continue
 
-        if service_type not in {"수요정오", "수요저녁"}:
+        if service_type not in {
+            "수요정오",
+            "수요저녁",
+        }:
             continue
 
         if not telegram_id and not name:
@@ -461,10 +462,20 @@ def get_wednesday_selections(recruitment_id):
 
         person_key = telegram_id or name
 
-        selections[person_key] = {
-            "telegram_id": telegram_id,
-            "name": name,
-            "selection": selection,
-        }
+        previous = latest_selections.get(person_key)
 
-    return list(selections.values())
+        # 아직 저장된 기록이 없거나
+        # 현재 행의 응답시간이 더 최신이면 교체
+        if (
+            previous is None
+            or responded_at
+            >= previous.get("responded_at", "")
+        ):
+            latest_selections[person_key] = {
+                "telegram_id": telegram_id,
+                "name": name,
+                "selection": selection,
+                "responded_at": responded_at,
+            }
+
+    return list(latest_selections.values())
