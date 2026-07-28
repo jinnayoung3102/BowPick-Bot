@@ -1,5 +1,6 @@
 import json
 import os
+import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -479,3 +480,98 @@ def get_wednesday_selections(recruitment_id):
             }
 
     return list(latest_selections.values())
+
+def save_assignment_draft(
+    service_date,
+    service_type,
+    assignment_result,
+):
+    """
+    AI 자동배치 결과를 '배치초안' 시트에 저장한다.
+
+    반환값:
+    {
+        "success": True,
+        "draft_id": "DRAFT-...",
+        "saved_count": 5,
+    }
+    """
+    worksheet = get_worksheet("배치초안")
+
+    draft_id = (
+        "DRAFT-"
+        + datetime.now(
+            ZoneInfo("Asia/Seoul")
+        ).strftime("%Y%m%d-%H%M%S")
+        + "-"
+        + uuid.uuid4().hex[:6].upper()
+    )
+
+    created_at = datetime.now(
+        ZoneInfo("Asia/Seoul")
+    ).strftime("%Y-%m-%d %H:%M:%S")
+
+    assignments = assignment_result.get(
+        "assignments",
+        [],
+    )
+
+    rows_to_save = []
+
+    for assignment in assignments:
+        part = str(
+            assignment.get("part", "")
+        ).strip()
+
+        names = assignment.get(
+            "names",
+            [],
+        )
+
+        reason = str(
+            assignment.get("reason", "")
+        ).strip()
+
+        if not part or not names:
+            continue
+
+        for name in names:
+            clean_name = str(name).strip()
+
+            if not clean_name:
+                continue
+
+            rows_to_save.append(
+                [
+                    draft_id,
+                    service_date,
+                    service_type,
+                    part,
+                    clean_name,
+                    reason,
+                    "대기",
+                    created_at,
+                ]
+            )
+
+    if not rows_to_save:
+        return {
+            "success": False,
+            "draft_id": draft_id,
+            "saved_count": 0,
+            "message": "저장할 배치 결과가 없습니다.",
+        }
+
+    worksheet.append_rows(
+        rows_to_save,
+        value_input_option="USER_ENTERED",
+    )
+
+    return {
+        "success": True,
+        "draft_id": draft_id,
+        "saved_count": len(rows_to_save),
+        "message": (
+            f"배치초안 {len(rows_to_save)}건을 저장했습니다."
+        ),
+    }
