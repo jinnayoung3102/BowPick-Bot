@@ -224,6 +224,39 @@ def webhook():
             recruitment_id = parts[1]
             selection = parts[2]
 
+            # 콜백 만료를 막기 위해 먼저 즉시 응답
+            if selection == "noon":
+                immediate_notice = (
+                    "☀️ 정오예배 선택을 반영합니다."
+                )
+
+            elif selection == "evening":
+                immediate_notice = (
+                    "🌙 저녁예배 선택을 반영합니다."
+                )
+
+            elif selection == "absent":
+                immediate_notice = (
+                    "❌ 불참 선택을 반영합니다."
+                )
+
+            elif selection == "attend":
+                immediate_notice = (
+                    "⭕ 참석 선택을 반영합니다."
+                )
+
+            else:
+                immediate_notice = (
+                    "⚠️ 선택 내용을 확인할 수 없습니다."
+                )
+
+            answer_callback_query(
+                callback_query_id=callback_query_id,
+                text=immediate_notice,
+                show_alert=False,
+            )
+
+            # 버튼을 누른 사용자 정보
             callback_user = callback_query.get(
                 "from",
                 {},
@@ -247,6 +280,7 @@ def webhook():
                 or f"사용자-{callback_user_id}"
             )
 
+            # 수요예배 버튼 처리
             if selection in {
                 "noon",
                 "evening",
@@ -265,26 +299,18 @@ def webhook():
                     fallback_name,
                 )
 
-                if selection == "noon":
-                    notice_text = (
-                        f"☀️ {saved_name}님, "
-                        "정오예배 참석으로 저장되었습니다."
-                    )
+                print(
+                    "Application saved:",
+                    {
+                        "recruitment_id": recruitment_id,
+                        "selection": selection,
+                        "user_id": callback_user_id,
+                        "name": saved_name,
+                    }
+                )
 
-                elif selection == "evening":
-                    notice_text = (
-                        f"🌙 {saved_name}님, "
-                        "저녁예배 참석으로 저장되었습니다."
-                    )
-
-                else:
-                    notice_text = (
-                        f"❌ {saved_name}님, "
-                        "둘 다 불참으로 저장되었습니다."
-                    )
-
-                # 동시에 여러 명이 누르는 경우를 고려해
-                # 잠깐 기다린 뒤 시트의 최신 상태를 다시 읽는다.
+                # 여러 사람이 거의 동시에 누를 경우를 고려해
+                # 잠시 기다린 뒤 최신 시트 내용을 다시 읽는다.
                 time.sleep(0.2)
 
                 noon_names, evening_names = (
@@ -319,56 +345,52 @@ def webhook():
                             service_date="수요예배 테스트",
                             noon_names=noon_names,
                             evening_names=evening_names,
-                            deadline_text="테스트 종료 전까지",
+                            deadline_text=(
+                                "테스트 종료 전까지"
+                            ),
                         )
 
                     except RuntimeError as update_error:
-                        error_text = str(update_error).strip()
-                        error_text_lower = error_text.lower()
+                        error_text = str(
+                            update_error
+                        ).strip()
+
+                        error_text_lower = (
+                            error_text.lower()
+                        )
 
                         print(
                             "Telegram message update error:",
                             error_text,
                         )
 
+                        # 같은 선택을 다시 눌러서
+                        # 모집글 내용이 변하지 않은 경우는 정상 처리
                         if (
-                            "message is not modified" in error_text_lower
-                            or "message_not_modified" in error_text_lower
+                            "message is not modified"
+                            in error_text_lower
+                            or "message_not_modified"
+                            in error_text_lower
                         ):
-                            notice_text = (
-                                f"ℹ️ {saved_name}님은 이미 "
-                                f"{'정오예배' if selection == 'noon' else '저녁예배' if selection == 'evening' else '불참'}"
-                                "으로 선택되어 있습니다."
-                            )
+                            pass
+
                         else:
                             raise
 
             elif selection == "attend":
-                notice_text = (
-                    "⭕ 참석으로 선택되었습니다."
+                print(
+                    "Sunday attendance callback received:",
+                    {
+                        "recruitment_id": recruitment_id,
+                        "user_id": callback_user_id,
+                    }
                 )
 
             else:
-                notice_text = (
-                    "⚠️ 알 수 없는 선택입니다."
+                print(
+                    "Unknown callback selection:",
+                    selection,
                 )
-
-            print(
-                "Callback received:",
-                {
-                    "recruitment_id": recruitment_id,
-                    "selection": selection,
-                    "user_id": callback_user_id,
-                }
-            )
-
-            # 단체방에는 새 메시지를 올리지 않고
-            # 버튼을 누른 사람에게만 잠깐 표시
-            answer_callback_query(
-                callback_query_id=callback_query_id,
-                text=notice_text,
-                show_alert=False,
-            )
 
             return "OK", 200
 
@@ -520,25 +542,18 @@ def webhook():
         )
 
         if callback_query:
-            callback_query_id = (
-                callback_query.get("id")
+            # 콜백은 이미 즉시 응답했으므로
+            # 다시 팝업을 전송하지 않고 로그만 남긴다.
+            print(
+                "Callback processing error:",
+                error_name,
+                error_message,
             )
-
-            try:
-                answer_callback_query(
-                    callback_query_id=callback_query_id,
-                    text=(
-                        f"❌ 처리 실패: {error_name}"
-                    ),
-                    show_alert=True,
-                )
-
-            except Exception:
-                traceback.print_exc()
 
             return "OK", 200
 
         message = data.get("message", {})
+
         chat_id = message.get(
             "chat",
             {},
