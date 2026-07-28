@@ -545,6 +545,23 @@ def webhook():
             )
 
         # 규칙 조회
+        elif "바우픽 규칙 보여줘" in text:
+            rules_str = "\n".join(
+                [
+                    f"- {rule}"
+                    for rule in DEFAULT_RULES
+                ]
+            )
+
+            reply = (
+                "🤖 [현재 적용 중인 바우픽 기본 규칙]\n"
+                f"{rules_str}"
+            )
+
+            send_telegram_message(
+                chat_id,
+                reply,
+            )
 
         # 일반 바우픽 호출은 관리자만 ChatGPT 사용 가능
         elif "바우픽" in text:
